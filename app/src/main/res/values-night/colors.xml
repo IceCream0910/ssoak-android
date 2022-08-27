@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widgetBackgroundColor">#303030</color>
+    <color name="widgetTitleColor">#FFF</color>
+    <color name="widgetContentColor">#bdbdbd</color>
+    <color name="webviewBackground">#121212</color>
+</resources>

@@ -1,0 +1,31 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:theme="@style/AppTheme.AppWidgetContainer"
+    android:id="@+id/mealWidget_wrap"
+    android:backgroundTint="@color/widgetBackgroundColor"
+    android:background="@drawable/app_widget_background"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="오늘의 급식"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@color/widgetTitleColor"/>
+
+        <TextView
+            android:id="@+id/appwidget_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="로딩중..."
+            android:textSize="17sp"
+            android:textAlignment="textStart"
+            android:textColor="@color/widgetContentColor"
+            android:gravity="center"
+            android:scrollbars = "vertical"
+            tools:ignore="RtlCompat" />
+</LinearLayout>
