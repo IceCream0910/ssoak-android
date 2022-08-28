@@ -1,16 +1,22 @@
 package com.icecream.sungilmeal
 
 import android.annotation.SuppressLint
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.app.PendingIntent.FLAG_IMMUTABLE
 import android.content.*
 import android.content.ContentValues.TAG
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
@@ -29,6 +35,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.tasks.OnCompleteListener
 import com.google.android.gms.tasks.Task
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.BaseTransientBottomBar
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.play.core.appupdate.AppUpdateManager
@@ -41,6 +48,9 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.messaging.FirebaseMessaging
 import com.icecream.sungilmeal.databinding.ActivityMainBinding
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 
 
 open class MainActivity : AppCompatActivity() {
@@ -49,11 +59,32 @@ open class MainActivity : AppCompatActivity() {
     private var webURL = "https://sungil.vercel.app"
     private lateinit var appUpdateManager : AppUpdateManager
     private lateinit var googleSignInClient : GoogleSignInClient
-
+    private var cameraPath = ""
+    private var mWebViewImageUpload: ValueCallback<Array<Uri>>? = null
 
     private lateinit var binding: ActivityMainBinding
     val getResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        Log.e(TAG, it.toString())
+
+    }
+
+    //파일첨부 결과
+    val launcher = registerForActivityResult(ActivityResultContracts.StartActivityForResult())  { result ->
+        if (result.resultCode == RESULT_OK) {
+            val intent = result.data
+
+            if(intent == null){ //바로 사진을 찍어서 올리는 경우
+                val results = arrayOf(Uri.parse(cameraPath))
+                mWebViewImageUpload!!.onReceiveValue(results)
+            }
+            else{ //사진 앱을 통해 사진을 가져온 경우
+                val results = intent!!.data!!
+                mWebViewImageUpload!!.onReceiveValue(arrayOf(results))
+            }
+        }
+        else{ //취소 한 경우 초기화
+            mWebViewImageUpload!!.onReceiveValue(null)
+            mWebViewImageUpload = null
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled", "ResourceAsColor")
@@ -68,6 +99,7 @@ open class MainActivity : AppCompatActivity() {
 // Returns an intent object that you use to check for an update.
         val appUpdateInfoTask = appUpdateManager.appUpdateInfo
         Glide.with(this).load(R.drawable.loader).into(binding.progressBar);
+
 
         val gso =
             GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -114,7 +146,7 @@ open class MainActivity : AppCompatActivity() {
         val userAgent = binding.webView.settings.userAgentString
         binding.webView.settings.userAgentString = "${userAgent}/hybridApp"
         WebView.setWebContentsDebuggingEnabled(true)
-
+        loadWebView()
 
         if (!isOnline()) {
             showNoNetSnackBar()
@@ -122,49 +154,76 @@ open class MainActivity : AppCompatActivity() {
         }
 
 
-        fun onJsConfirm(
-            view: WebView?,
-            url: String?,
-            message: String?,
-            result: JsResult
-        ): Boolean {
-            AlertDialog.Builder(this@MainActivity)
-                .setTitle("")
-                .setMessage(message)
-                .setPositiveButton(
-                    android.R.string.ok
-                ) { dialog, which -> result.confirm() }
-                .setNegativeButton(
-                    android.R.string.cancel
-                ) { dialog, which -> result.cancel() }
-                .setCancelable(false)
-                .create()
-                .show()
-            return true
+        // 현재 지정된 시간으로 알람 시간 설정
+        val calendar = Calendar.getInstance()
+        calendar.timeInMillis = System.currentTimeMillis()
+        calendar[Calendar.HOUR_OF_DAY] = 10
+        calendar[Calendar.MINUTE] = 50
+        calendar[Calendar.SECOND] = 0
+
+
+        // 이미 지난 시간을 지정했다면 다음날 같은 시간으로 설정
+        if (calendar.before(Calendar.getInstance())) {
+            calendar.add(Calendar.DATE, 1)
         }
 
-        fun onJsAlert(
-            view: WebView?,
-            url: String?,
-            message: String?,
-            result: JsResult
-        ): Boolean {
-            AlertDialog.Builder(this@MainActivity)
-                .setTitle("")
-                .setMessage(message)
-                .setPositiveButton(
-                    android.R.string.ok
-                ) { dialog, which -> result.confirm() }
-                .setCancelable(false)
-                .create()
-                .show()
-            return true
-        }
+        val currentDateTime = calendar.time
+        val date_text: String =
+            SimpleDateFormat("yyyy년 MM월 dd일 EE요일 a hh시 mm분 ", Locale.getDefault()).format(
+                currentDateTime
+            )
+        Log.e("taein", date_text)
+
+        //  Preference에 설정한 값 저장
+        val editor = getSharedPreferences("daily alarm", MODE_PRIVATE).edit()
+        editor.putLong("nextNotifyTime", calendar.timeInMillis)
+        editor.apply()
+
+        diaryNotification(calendar)
 
     }
 
+    private fun diaryNotification(calendar : Calendar) {
+        val shared: SharedPreferences = applicationContext.getSharedPreferences("ssoak", MODE_PRIVATE)
+        val dailyNotify = shared.getBoolean("daily_noti", true)
+
+        val pm = this.packageManager
+        val receiver = ComponentName(this, DeviceBootReceiver::class.java)
+        val alarmIntent = Intent(this, AlarmReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(this, 0, alarmIntent, FLAG_IMMUTABLE)
+        val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+
+        // 사용자가 매일 알람을 허용했다면
+        if (dailyNotify) {
+            alarmManager.setRepeating(
+                AlarmManager.RTC_WAKEUP, calendar.timeInMillis,
+                AlarmManager.INTERVAL_DAY, pendingIntent
+            )
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                calendar.timeInMillis,
+                pendingIntent
+            )
+
+            // 부팅 후 실행되는 리시버 사용가능하게 설정
+            pm.setComponentEnabledSetting(
+                receiver,
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP
+            )
+        }
+    }
     /** Instantiate the interface and set the context  */
     class WebAppInterface(private val mContext: Context) : MainActivity() {
+        @JavascriptInterface
+        fun setNotiEnable(result : Boolean) {
+            val shared: SharedPreferences = mContext.getSharedPreferences("ssoak", MODE_PRIVATE)
+            val editor = shared.edit()
+            editor.putBoolean("daily_noti", result)
+            editor.apply();
+            Log.e("taein", shared.getBoolean("daily_noti", true).toString())
+        }
+
         @JavascriptInterface
         fun logoutAndroidApp() {
             Log.e(TAG, "logout 요청")
@@ -172,7 +231,6 @@ open class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun sendUserIdForFCM(userId : String) {
-            Log.e(TAG, "receive user id from javascript : $userId")
             updateFcmToken(userId)
         }
 
@@ -189,14 +247,13 @@ open class MainActivity : AppCompatActivity() {
                 val usersRef = db.collection("users").document(userId)
                 usersRef
                     .update("fcmToken", token)
-                    .addOnSuccessListener { Log.e(TAG, "update fcm token : $token") }
+                    .addOnSuccessListener { Log.e(TAG, "update fcm token$token") }
                     .addOnFailureListener { e -> Log.e(TAG, "Error updating document", e) }
             })
         }
     }
 
     override fun onResume() {
-        if (isOnline() && !isLoaded) loadWebView()
         super.onResume()
 
         appUpdateManager
@@ -327,6 +384,87 @@ open class MainActivity : AppCompatActivity() {
 
         }
 
+        binding.webView.webChromeClient = object : WebChromeClient() {
+            override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
+                onJsAlert(message!!, result!!)
+                return true
+            }
+
+            override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
+                onJsConfirm(message!!, result!!)
+                return true
+            }
+
+            override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
+                try{
+                    mWebViewImageUpload = filePathCallback!!
+                    var takePictureIntent : Intent?
+                    takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                    if(takePictureIntent.resolveActivity(packageManager) != null){
+
+                        val photoFile : File? = createImageFile()
+                        takePictureIntent.putExtra("PhotoPath",cameraPath)
+
+                        if(photoFile != null){
+                            cameraPath = "file:${photoFile.absolutePath}"
+                            takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT,Uri.fromFile(photoFile))
+                        }
+                        else takePictureIntent = null
+                    }
+                    val contentSelectionIntent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+                    contentSelectionIntent.type = "image/*"
+
+                    val intentArray: Array<Intent?> = if(takePictureIntent != null) arrayOf(takePictureIntent)
+                    else takePictureIntent?.get(0)!!
+
+                    val chooserIntent = Intent(Intent.ACTION_CHOOSER)
+                    chooserIntent.putExtra(Intent.EXTRA_INTENT, contentSelectionIntent)
+                    chooserIntent.putExtra(Intent.EXTRA_TITLE,"첨부할 사진을 선택해주세요.")
+                    chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS, intentArray)
+                    launcher.launch(chooserIntent)
+                }
+                catch (e : Exception){ }
+                return true
+            }
+
+    }
+    }
+
+    fun createImageFile(): File? {
+        @SuppressLint("SimpleDateFormat")
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
+        val imageFileName = "img_" + timeStamp + "_"
+        val storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        return File.createTempFile(imageFileName, ".jpg", storageDir)
+    }
+
+
+    fun onJsAlert(message : String, result : JsResult) : Unit{
+        MaterialAlertDialogBuilder(this@MainActivity, R.style.AlertDialogTheme)
+            .setTitle("")
+            .setMessage(message)
+            .setPositiveButton(
+                android.R.string.ok
+            ) { dialog, which -> result.confirm() }
+            .setCancelable(true)
+            .create()
+            .show()
+    }
+
+
+    fun onJsConfirm(message : String, result : JsResult) : Unit {
+        MaterialAlertDialogBuilder(this@MainActivity, R.style.AlertDialogTheme)
+            .setTitle("")
+            .setMessage(message)
+            .setPositiveButton(
+                android.R.string.ok
+            ) { dialog, which -> result.confirm() }
+            .setNegativeButton(
+                android.R.string.cancel
+            ) { dialog, which -> result.cancel() }
+            .setCancelable(false)
+            .create()
+            .show()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -400,12 +538,19 @@ open class MainActivity : AppCompatActivity() {
     }
 
     private fun showNoNetSnackBar() {
-        val snack =
-            Snackbar.make(binding.rootView, getString(R.string.no_internet), Snackbar.LENGTH_INDEFINITE)
-        snack.setAction(getString(R.string.settings)) {
-            startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
-        }
-        snack.show()
+        MaterialAlertDialogBuilder(this@MainActivity, R.style.AlertDialogTheme)
+            .setTitle("인터넷 연결 오류")
+            .setMessage("인터넷 연결 상태가 원활하지 않아 서비스 이용이 불가능합니다. 잠시 후 다시 시도해주세요.")
+            .setPositiveButton(
+                "설정"
+            ) { dialog, which -> startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+                finish() }
+            .setNegativeButton(
+                "종료"
+            ) { dialog, which -> finish() }
+            .setCancelable(false)
+            .create()
+            .show()
     }
 
 
@@ -439,8 +584,6 @@ open class MainActivity : AppCompatActivity() {
             Log.e("signInResult", "signInResult:failed code=" + e.statusCode)
         }
     }
-
-
 
 
 
