@@ -102,6 +102,7 @@ class AlarmReceiver : BroadcastReceiver() {
             .setContentIntent(pendingI)
 
         notificationManager.notify(1234, builder.build())
+        Log.e("taein", "알림내용 : "+content)
 
         // 내일 같은 시간으로 알람시간 결정
         val nextNotifyTime = Calendar.getInstance()

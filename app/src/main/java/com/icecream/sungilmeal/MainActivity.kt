@@ -12,10 +12,7 @@ import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
-import android.os.Bundle
-import android.os.Environment
-import android.os.Handler
-import android.os.Looper
+import android.os.*
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
@@ -24,9 +21,12 @@ import android.view.View
 import android.webkit.*
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -67,6 +67,40 @@ open class MainActivity : AppCompatActivity() {
 
     }
 
+
+    @RequiresApi(33)
+    private fun checkPermissions(){
+        val notiPermission = ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+        if(notiPermission != PackageManager.PERMISSION_GRANTED){
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if(requestCode == 101){
+            if(grantResults.size > 0){
+                grantResults.forEach {
+                    if(it != PackageManager.PERMISSION_GRANTED){
+                        MaterialAlertDialogBuilder(this@MainActivity, R.style.AlertDialogTheme)
+                            .setTitle("권한을 허용해주세요")
+                            .setMessage("앱 기능 사용을 위해 알림 권한을 허용해주세요.")
+                            .setPositiveButton(
+                                android.R.string.ok
+                            ) { dialog, which -> val intent = Intent()
+                                intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                                val uri = Uri.fromParts("package", packageName, null)
+                                intent.data = uri
+                                startActivity(intent) }
+                            .setCancelable(false)
+                            .create()
+                            .show()
+                    }
+                }
+            }
+        }
+    }
+
     //파일첨부 결과
     val launcher = registerForActivityResult(ActivityResultContracts.StartActivityForResult())  { result ->
         if (result.resultCode == RESULT_OK) {
@@ -95,6 +129,11 @@ open class MainActivity : AppCompatActivity() {
         setContentView(view)
 
         val context = applicationContext
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            checkPermissions()
+        }
+
         appUpdateManager = AppUpdateManagerFactory.create(context)
 // Returns an intent object that you use to check for an update.
         val appUpdateInfoTask = appUpdateManager.appUpdateInfo
@@ -426,7 +465,6 @@ open class MainActivity : AppCompatActivity() {
                 catch (e : Exception){ }
                 return true
             }
-
     }
     }
 
@@ -485,13 +523,18 @@ open class MainActivity : AppCompatActivity() {
         when {
             doubleBackToExitPressedOnce -> {
                 onBackPressed()
+                finish();
             }
             else -> {
                 doubleBackToExitPressedOnce = true
-                val snack =
-                    Snackbar.make(binding.rootView, "뒤로가기 버튼을 한 번 더 누르면 앱이 종료됩니다.", Snackbar.LENGTH_SHORT)
-                setSnackBarOption(snack) // 스낵바 옵션 설정
-                snack.show()
+               if(binding.webView.url == "https://sungil.vercel.app/" || binding.webView.url == "https://sungil.vercel.app" || binding.webView.url == "https://sungil.vercel.app/index.html")  {
+                   binding.webView.loadUrl("javascript:toast('앱을 종료하려면 뒤로가기를 한 번 더 눌러주세요')");
+               } else {
+                   val snack =
+                       Snackbar.make(binding.rootView, "뒤로가기 버튼을 한 번 더 누르면 앱이 종료됩니다.", Snackbar.LENGTH_SHORT)
+                   setSnackBarOption(snack) // 스낵바 옵션 설정
+                   snack.show()
+               }
                 Handler(Looper.myLooper()!!).postDelayed(
                     { doubleBackToExitPressedOnce = false },
                     2000
