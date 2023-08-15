@@ -5,15 +5,15 @@ apply plugin: 'com.google.gms.google-services'
 apply plugin: 'kotlin-android-extensions'
 
 android {
-    compileSdk 33
+    compileSdk 34
     buildToolsVersion "30.0.3"
 
     defaultConfig {
         applicationId "com.icecream.sungilmeal"
         minSdkVersion 23
-        targetSdkVersion 33
-        versionCode 8
-        versionName "1.4"
+        targetSdkVersion 34
+        versionCode 9
+        versionName "1.5"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
