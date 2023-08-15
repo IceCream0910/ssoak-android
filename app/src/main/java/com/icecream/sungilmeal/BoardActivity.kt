@@ -18,10 +18,10 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
-import com.icecream.sungilmeal.databinding.ActivityMainBinding
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+
 
 class BoardActivity : AppCompatActivity() {
 
@@ -166,6 +166,10 @@ class BoardActivity : AppCompatActivity() {
             override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
                 onJsConfirm(message!!, result!!)
                 return true
+            }
+
+            override fun onCloseWindow(window: WebView) {
+                finish()
             }
 
             @SuppressLint("QueryPermissionsNeeded", "IntentReset")

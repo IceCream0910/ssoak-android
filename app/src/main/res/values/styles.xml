@@ -8,7 +8,16 @@
         <item name="colorAccent">@color/colorAccent</item>
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:windowLightStatusBar" >true</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <style name="Widget.Button" parent="@style/Widget.AppCompat.Button">
+        <item name="android:textColor">@color/colorPrimary</item>
+    </style>
+
+    <style name="MaterialCalendarTheme" parent="ThemeOverlay.MaterialComponents.MaterialCalendar">
+        <item name="buttonBarPositiveButtonStyle">@color/colorPrimary</item>
+        <item name="buttonBarNegativeButtonStyle">@color/colorPrimary</item>
     </style>
 
     <style name="AlertDialogTheme" parent="ThemeOverlay.Material3.MaterialAlertDialog">

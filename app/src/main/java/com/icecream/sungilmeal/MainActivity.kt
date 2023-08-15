@@ -1,14 +1,15 @@
 package com.icecream.sungilmeal
 
 import android.annotation.SuppressLint
-import android.app.AlarmManager
-import android.app.PendingIntent
-import android.app.PendingIntent.FLAG_IMMUTABLE
-import android.content.*
+import android.app.DatePickerDialog
+import android.content.ActivityNotFoundException
 import android.content.ContentValues.TAG
+import android.content.Context
+import android.content.Intent
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -22,7 +23,6 @@ import android.webkit.*
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.app.ActivityCompat
@@ -44,10 +44,12 @@ import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.InstallStatus
 import com.google.android.play.core.install.model.UpdateAvailability
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.database.ktx.database
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.messaging.FirebaseMessaging
 import com.icecream.sungilmeal.databinding.ActivityMainBinding
+import kotlinx.android.synthetic.main.activity_main.*
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -57,41 +59,51 @@ open class MainActivity : AppCompatActivity() {
     private var isLoaded: Boolean = false
     private var doubleBackToExitPressedOnce = false
     private var webURL = "https://sungil.vercel.app"
-    private lateinit var appUpdateManager : AppUpdateManager
-    private lateinit var googleSignInClient : GoogleSignInClient
+    private lateinit var appUpdateManager: AppUpdateManager
+    private lateinit var googleSignInClient: GoogleSignInClient
     private var cameraPath = ""
     private var mWebViewImageUpload: ValueCallback<Array<Uri>>? = null
 
-    private lateinit var binding: ActivityMainBinding
+    lateinit var binding: ActivityMainBinding
     val getResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-
     }
 
 
     @RequiresApi(33)
-    private fun checkPermissions(){
-        val notiPermission = ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
-        if(notiPermission != PackageManager.PERMISSION_GRANTED){
-            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+    private fun checkPermissions() {
+        val notiPermission =
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+        if (notiPermission != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                101
+            )
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if(requestCode == 101){
-            if(grantResults.size > 0){
+        if (requestCode == 101) {
+            if (grantResults.size > 0) {
                 grantResults.forEach {
-                    if(it != PackageManager.PERMISSION_GRANTED){
+                    if (it != PackageManager.PERMISSION_GRANTED) {
                         MaterialAlertDialogBuilder(this@MainActivity, R.style.AlertDialogTheme)
                             .setTitle("권한을 허용해주세요")
                             .setMessage("앱 기능 사용을 위해 알림 권한을 허용해주세요.")
                             .setPositiveButton(
                                 android.R.string.ok
-                            ) { dialog, which -> val intent = Intent()
+                            ) { dialog, which ->
+                                val intent = Intent()
                                 intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
                                 val uri = Uri.fromParts("package", packageName, null)
                                 intent.data = uri
-                                startActivity(intent) }
+                                startActivity(intent)
+                            }
                             .setCancelable(false)
                             .create()
                             .show()
@@ -101,25 +113,25 @@ open class MainActivity : AppCompatActivity() {
         }
     }
 
-    //파일첨부 결과
-    val launcher = registerForActivityResult(ActivityResultContracts.StartActivityForResult())  { result ->
-        if (result.resultCode == RESULT_OK) {
-            val intent = result.data
 
-            if(intent == null){ //바로 사진을 찍어서 올리는 경우
-                val results = arrayOf(Uri.parse(cameraPath))
-                mWebViewImageUpload!!.onReceiveValue(results)
-            }
-            else{ //사진 앱을 통해 사진을 가져온 경우
-                val results = intent!!.data!!
-                mWebViewImageUpload!!.onReceiveValue(arrayOf(results))
+    //파일첨부 결과
+    val launcher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val intent = result.data
+
+                if (intent == null) { //바로 사진을 찍어서 올리는 경우
+                    val results = arrayOf(Uri.parse(cameraPath))
+                    mWebViewImageUpload!!.onReceiveValue(results)
+                } else { //사진 앱을 통해 사진을 가져온 경우
+                    val results = intent!!.data!!
+                    mWebViewImageUpload!!.onReceiveValue(arrayOf(results))
+                }
+            } else { //취소 한 경우 초기화
+                mWebViewImageUpload!!.onReceiveValue(null)
+                mWebViewImageUpload = null
             }
         }
-        else{ //취소 한 경우 초기화
-            mWebViewImageUpload!!.onReceiveValue(null)
-            mWebViewImageUpload = null
-        }
-    }
 
     @SuppressLint("SetJavaScriptEnabled", "ResourceAsColor")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -165,7 +177,8 @@ open class MainActivity : AppCompatActivity() {
                     // The current activity making the update request.
                     this,
                     // Include a request code to later monitor this update request.
-                    1)
+                    1
+                )
             } else {
                 Log.e(TAG, "업데이트 없음")
             }
@@ -181,115 +194,22 @@ open class MainActivity : AppCompatActivity() {
         binding.webView.isHapticFeedbackEnabled = false
         binding.webView.isFocusable = true
         binding.webView.isFocusableInTouchMode = true
-        binding.webView.addJavascriptInterface(WebAppInterface(this), "Android")
+        binding.webView.addJavascriptInterface(WebAppInterface(this, binding.webView), "Android")
         val userAgent = binding.webView.settings.userAgentString
-        binding.webView.settings.userAgentString = "${userAgent}/hybridApp"
-        WebView.setWebContentsDebuggingEnabled(true)
+        binding.webView.settings.userAgentString =
+            "${userAgent}/hybridApp${BuildConfig.VERSION_CODE}"
         loadWebView()
 
         if (!isOnline()) {
             showNoNetSnackBar()
             return
         }
-
-
-        // 현재 지정된 시간으로 알람 시간 설정
-        val calendar = Calendar.getInstance()
-        calendar.timeInMillis = System.currentTimeMillis()
-        calendar[Calendar.HOUR_OF_DAY] = 10
-        calendar[Calendar.MINUTE] = 50
-        calendar[Calendar.SECOND] = 0
-
-
-        // 이미 지난 시간을 지정했다면 다음날 같은 시간으로 설정
-        if (calendar.before(Calendar.getInstance())) {
-            calendar.add(Calendar.DATE, 1)
-        }
-
-        val currentDateTime = calendar.time
-        val date_text: String =
-            SimpleDateFormat("yyyy년 MM월 dd일 EE요일 a hh시 mm분 ", Locale.getDefault()).format(
-                currentDateTime
-            )
-        Log.e("taein", date_text)
-
-        //  Preference에 설정한 값 저장
-        val editor = getSharedPreferences("daily alarm", MODE_PRIVATE).edit()
-        editor.putLong("nextNotifyTime", calendar.timeInMillis)
-        editor.apply()
-
-        diaryNotification(calendar)
-
     }
 
-    private fun diaryNotification(calendar : Calendar) {
-        val shared: SharedPreferences = applicationContext.getSharedPreferences("ssoak", MODE_PRIVATE)
-        val dailyNotify = shared.getBoolean("daily_noti", true)
 
-        val pm = this.packageManager
-        val receiver = ComponentName(this, DeviceBootReceiver::class.java)
-        val alarmIntent = Intent(this, AlarmReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(this, 0, alarmIntent, FLAG_IMMUTABLE)
-        val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-
-        // 사용자가 매일 알람을 허용했다면
-        if (dailyNotify) {
-            alarmManager.setRepeating(
-                AlarmManager.RTC_WAKEUP, calendar.timeInMillis,
-                AlarmManager.INTERVAL_DAY, pendingIntent
-            )
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
-            )
-
-            // 부팅 후 실행되는 리시버 사용가능하게 설정
-            pm.setComponentEnabledSetting(
-                receiver,
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                PackageManager.DONT_KILL_APP
-            )
-        }
-    }
-    /** Instantiate the interface and set the context  */
-    class WebAppInterface(private val mContext: Context) : MainActivity() {
-        @JavascriptInterface
-        fun setNotiEnable(result : Boolean) {
-            val shared: SharedPreferences = mContext.getSharedPreferences("ssoak", MODE_PRIVATE)
-            val editor = shared.edit()
-            editor.putBoolean("daily_noti", result)
-            editor.apply();
-            Log.e("taein", shared.getBoolean("daily_noti", true).toString())
-        }
-
-        @JavascriptInterface
-        fun logoutAndroidApp() {
-            Log.e(TAG, "logout 요청")
-        }
-
-        @JavascriptInterface
-        fun sendUserIdForFCM(userId : String) {
-            updateFcmToken(userId)
-        }
-
-        private fun updateFcmToken(userId : String) { //fcm 토큰 user DB에 업데이트
-            FirebaseMessaging.getInstance().token.addOnCompleteListener(OnCompleteListener { task ->
-                if (!task.isSuccessful) {
-                    Log.w(TAG, "Fetching FCM registration token failed", task.exception)
-                    return@OnCompleteListener
-                }
-
-                val token = task.result
-                Log.e(TAG, "get fcm token : $token")
-                val db = Firebase.firestore
-                val usersRef = db.collection("users").document(userId)
-                usersRef
-                    .update("fcmToken", token)
-                    .addOnSuccessListener { Log.e(TAG, "update fcm token$token") }
-                    .addOnFailureListener { e -> Log.e(TAG, "Error updating document", e) }
-            })
-        }
+    fun updateSelectedDate(result : String) {
+        Log.e("taein", result)
+        webView.evaluateJavascript("javascript:alert('hi')", null)
     }
 
     override fun onResume() {
@@ -338,25 +258,37 @@ open class MainActivity : AppCompatActivity() {
                     if (url.startsWith(PROTOCOL_START)) {
                         val customUrlStartIndex = PROTOCOL_START.length
                         val customUrlEndIndex = url.indexOf(PROTOCOL_INTENT)
-                        if(customUrlEndIndex< 0 ){
+                        if (customUrlEndIndex < 0) {
                             return false
-                        }else{
+                        } else {
                             try {
-                                val resultUrl = url.substring(customUrlStartIndex, customUrlEndIndex)
+                                val resultUrl =
+                                    url.substring(customUrlStartIndex, customUrlEndIndex)
                                 val intent = Intent.parseUri(resultUrl, Intent.URI_INTENT_SCHEME)
                                 startActivity(intent)
                                 return true
                             } catch (e: ActivityNotFoundException) {
                                 // 카카오 링크가 포함된 경우
-                                if(url.contains("kakaolink://send")){
-                                    (Intent(Intent.ACTION_VIEW, Uri.parse(GOOGLE_PLAY_STORE_PREFIX + "com.kakao.talk")))
+                                if (url.contains("kakaolink://send")) {
+                                    (Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse(GOOGLE_PLAY_STORE_PREFIX + "com.kakao.talk")
+                                    ))
                                     return true
                                 }
                                 val packageStartIndex = customUrlEndIndex + PROTOCOL_INTENT.length
                                 val packageEndIndex = url.indexOf(PROTOCOL_END)
 
-                                val packageName = url.substring(packageStartIndex,if(packageEndIndex< 0) url.length else packageEndIndex)
-                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GOOGLE_PLAY_STORE_PREFIX + packageName)))
+                                val packageName = url.substring(
+                                    packageStartIndex,
+                                    if (packageEndIndex < 0) url.length else packageEndIndex
+                                )
+                                startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse(GOOGLE_PLAY_STORE_PREFIX + packageName)
+                                    )
+                                )
                             }
                             return true
                         }
@@ -365,11 +297,11 @@ open class MainActivity : AppCompatActivity() {
                         val intent = Intent(Intent.ACTION_DIAL, Uri.parse(url))
                         startActivity(intent)
                         return true
-                    }else if (url.startsWith("mailto:")) {
+                    } else if (url.startsWith("mailto:")) {
                         val i = Intent(Intent.ACTION_SENDTO, Uri.parse(url))
                         startActivity(i)
                         return true
-                    } else if (url.startsWith("https://ssoak-72f93")  || url.startsWith("https://accounts.google.com/")) { //로그인
+                    } else if (url.startsWith("https://ssoak-72f93") || url.startsWith("https://accounts.google.com/")) { //로그인
                         Log.e(TAG, "login")
                         val signInIntent = googleSignInClient.signInIntent;
                         startActivityForResult(signInIntent, 1024)
@@ -383,7 +315,7 @@ open class MainActivity : AppCompatActivity() {
                         return true
                     }
                 } else { //내부 url
-                    if(url.startsWith("https://sungil.vercel.app/board.html")) {
+                    if (url.startsWith("https://sungil.vercel.app/board.html")) {
                         val intent = Intent(applicationContext, BoardActivity::class.java)
                         intent.putExtra("url", url)
                         startActivity(intent)
@@ -403,8 +335,6 @@ open class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 isLoaded = true
-                binding.progressBar.visibility = View.INVISIBLE
-                binding.webView.visibility = View.VISIBLE
                 super.onPageFinished(view, url)
             }
 
@@ -424,60 +354,88 @@ open class MainActivity : AppCompatActivity() {
         }
 
         binding.webView.webChromeClient = object : WebChromeClient() {
-            override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
+            override fun onJsAlert(
+                view: WebView?,
+                url: String?,
+                message: String?,
+                result: JsResult?
+            ): Boolean {
                 onJsAlert(message!!, result!!)
                 return true
             }
 
-            override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
+            override fun onJsConfirm(
+                view: WebView?,
+                url: String?,
+                message: String?,
+                result: JsResult?
+            ): Boolean {
                 onJsConfirm(message!!, result!!)
                 return true
             }
 
-            override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
-                try{
+            override fun onProgressChanged(view: WebView?, progress: Int) {
+                binding.progressBar2.setProgress(progress)
+                if (progress == 100) {
+                    binding.progressBar2.visibility = View.INVISIBLE
+                    binding.progressBar.visibility = View.INVISIBLE
+                    binding.webView.visibility = View.VISIBLE
+                }
+            }
+
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                try {
                     mWebViewImageUpload = filePathCallback!!
-                    var takePictureIntent : Intent?
+                    var takePictureIntent: Intent?
                     takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-                    if(takePictureIntent.resolveActivity(packageManager) != null){
+                    if (takePictureIntent.resolveActivity(packageManager) != null) {
 
-                        val photoFile : File? = createImageFile()
-                        takePictureIntent.putExtra("PhotoPath",cameraPath)
+                        val photoFile: File? = createImageFile()
+                        takePictureIntent.putExtra("PhotoPath", cameraPath)
 
-                        if(photoFile != null){
+                        if (photoFile != null) {
                             cameraPath = "file:${photoFile.absolutePath}"
-                            takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT,Uri.fromFile(photoFile))
-                        }
-                        else takePictureIntent = null
+                            takePictureIntent.putExtra(
+                                MediaStore.EXTRA_OUTPUT,
+                                Uri.fromFile(photoFile)
+                            )
+                        } else takePictureIntent = null
                     }
-                    val contentSelectionIntent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+                    val contentSelectionIntent =
+                        Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
                     contentSelectionIntent.type = "image/*"
 
-                    val intentArray: Array<Intent?> = if(takePictureIntent != null) arrayOf(takePictureIntent)
-                    else takePictureIntent?.get(0)!!
+                    val intentArray: Array<Intent?> =
+                        if (takePictureIntent != null) arrayOf(takePictureIntent)
+                        else takePictureIntent?.get(0)!!
 
                     val chooserIntent = Intent(Intent.ACTION_CHOOSER)
                     chooserIntent.putExtra(Intent.EXTRA_INTENT, contentSelectionIntent)
-                    chooserIntent.putExtra(Intent.EXTRA_TITLE,"첨부할 사진을 선택해주세요.")
+                    chooserIntent.putExtra(Intent.EXTRA_TITLE, "첨부할 사진을 선택해주세요.")
                     chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS, intentArray)
                     launcher.launch(chooserIntent)
+                } catch (e: Exception) {
                 }
-                catch (e : Exception){ }
                 return true
             }
-    }
+        }
     }
 
     fun createImageFile(): File? {
         @SuppressLint("SimpleDateFormat")
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
         val imageFileName = "img_" + timeStamp + "_"
-        val storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        val storageDir =
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
         return File.createTempFile(imageFileName, ".jpg", storageDir)
     }
 
 
-    fun onJsAlert(message : String, result : JsResult) : Unit{
+    fun onJsAlert(message: String, result: JsResult): Unit {
         MaterialAlertDialogBuilder(this@MainActivity, R.style.AlertDialogTheme)
             .setTitle("")
             .setMessage(message)
@@ -490,7 +448,7 @@ open class MainActivity : AppCompatActivity() {
     }
 
 
-    fun onJsConfirm(message : String, result : JsResult) : Unit {
+    fun onJsConfirm(message: String, result: JsResult): Unit {
         MaterialAlertDialogBuilder(this@MainActivity, R.style.AlertDialogTheme)
             .setTitle("")
             .setMessage(message)
@@ -527,14 +485,18 @@ open class MainActivity : AppCompatActivity() {
             }
             else -> {
                 doubleBackToExitPressedOnce = true
-               if(binding.webView.url == "https://sungil.vercel.app/" || binding.webView.url == "https://sungil.vercel.app" || binding.webView.url == "https://sungil.vercel.app/index.html")  {
-                   binding.webView.loadUrl("javascript:toast('앱을 종료하려면 뒤로가기를 한 번 더 눌러주세요')");
-               } else {
-                   val snack =
-                       Snackbar.make(binding.rootView, "뒤로가기 버튼을 한 번 더 누르면 앱이 종료됩니다.", Snackbar.LENGTH_SHORT)
-                   setSnackBarOption(snack) // 스낵바 옵션 설정
-                   snack.show()
-               }
+                if (binding.webView.url == "https://sungil.vercel.app/" || binding.webView.url == "https://sungil.vercel.app" || binding.webView.url == "https://sungil.vercel.app/index.html") {
+                    binding.webView.loadUrl("javascript:toast('앱을 종료하려면 뒤로가기를 한 번 더 눌러주세요')");
+                } else {
+                    val snack =
+                        Snackbar.make(
+                            binding.rootView,
+                            "뒤로가기 버튼을 한 번 더 누르면 앱이 종료됩니다.",
+                            Snackbar.LENGTH_SHORT
+                        )
+                    setSnackBarOption(snack) // 스낵바 옵션 설정
+                    snack.show()
+                }
                 Handler(Looper.myLooper()!!).postDelayed(
                     { doubleBackToExitPressedOnce = false },
                     2000
@@ -586,16 +548,17 @@ open class MainActivity : AppCompatActivity() {
             .setMessage("인터넷 연결 상태가 원활하지 않아 서비스 이용이 불가능합니다. 잠시 후 다시 시도해주세요.")
             .setPositiveButton(
                 "설정"
-            ) { dialog, which -> startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
-                finish() }
+            ) { dialog, which ->
+                startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+                finish()
+            }
             .setNegativeButton(
                 "종료"
             ) { dialog, which -> finish() }
-            .setCancelable(false)
+            .setCancelable(true)
             .create()
             .show()
     }
-
 
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -616,7 +579,11 @@ open class MainActivity : AppCompatActivity() {
                 val personName = acct.displayName
                 val credential = GoogleAuthProvider.getCredential(acct.idToken!!, null)
                 val idToken = acct.idToken!!
-                val snack = Snackbar.make(binding.rootView, "$personName 님의 구글 계정으로 로그인합니다.", Snackbar.LENGTH_SHORT);
+                val snack = Snackbar.make(
+                    binding.rootView,
+                    "$personName 님의 구글 계정으로 로그인합니다.",
+                    Snackbar.LENGTH_SHORT
+                );
                 setSnackBarOption(snack) // 스낵바 옵션 설정
                 snack.show()
                 binding.webView.loadUrl("javascript:pushWebviewGoogleLoginToken('$idToken')");
@@ -627,7 +594,4 @@ open class MainActivity : AppCompatActivity() {
             Log.e("signInResult", "signInResult:failed code=" + e.statusCode)
         }
     }
-
-
-
 }

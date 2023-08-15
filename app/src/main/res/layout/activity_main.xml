@@ -7,6 +7,16 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
+    <ProgressBar
+        android:id="@+id/progressBar2"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="10px"
+        android:layout_x="-3dp"
+        android:layout_y="5dp"
+        android:progressDrawable="@drawable/progressbar"
+        />
+
     <ImageView
         android:id="@+id/progressBar"
         android:layout_width="70dp"
@@ -21,18 +31,19 @@
         android:contentDescription="로딩 애니메이션">
     </ImageView>
 
-
     <WebView
         android:id="@+id/webView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:visibility="invisible"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        android:visibility="invisible">
-    </WebView>
+        app:layout_constraintVertical_bias="0.0">
 
+    </WebView>
 
     <TextView
         android:visibility="gone"

@@ -10,4 +10,10 @@
         <item name="windowNoTitle">true</item>
         <item name="android:windowLightStatusBar" >false</item>
     </style>
+
+    <style name="DatePickerTheme" parent="Theme.MaterialComponents.DayNight.Dialog.Alert">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorPrimaryDark</item>
+    </style>
 </resources>

@@ -61,15 +61,6 @@
                 android:resource="@xml/meal_widget_info" />
         </receiver>
 
-        <receiver android:name=".DeviceBootReceiver"
-            android:enabled="false"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
-
-        <receiver android:name=".AlarmReceiver" />
     </application>
 
 </manifest>
